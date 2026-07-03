@@ -7,3 +7,4 @@ scikit-learn
 dill
 UQpy
 openpyxl
+setuptools
