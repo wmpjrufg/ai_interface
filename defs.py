@@ -3,7 +3,7 @@ import numpy as np
 
 # Regression and Metrics
 from sklearn.metrics import r2_score, accuracy_score
-from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
+from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score,cross_validate
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
@@ -25,6 +25,7 @@ from UQpy.surrogates import (
     TotalDegreeBasis
 )
 
+
 # AI REGRESSION
 def train_regression(X_train, X_test, y_train, y_test, selected_models, k_folds=5, random_seed=42):
     """Trains the selected regression models and returns K-Fold metrics."""
@@ -38,21 +39,28 @@ def train_regression(X_train, X_test, y_train, y_test, selected_models, k_folds=
     
     models = {name: all_models[name] for name in selected_models}
     
-    # K-Fold usando os parâmetros do usuário
     kf = KFold(n_splits=k_folds, shuffle=True, random_state=random_seed)
     
     results, trained_models, cv_scores, cv_avg = {}, {}, {}, {}
     
     for name, model in models.items():
-        scores = cross_val_score(model, X_train, y_train, cv=kf, scoring='r2')
+        cv_results = cross_validate(model, X_train, y_train, cv=kf, scoring='r2', return_estimator=True)
+        
+        scores = cv_results['test_score']
+        estimators = cv_results['estimator']
+        
         cv_scores[name] = [round(score, 4) for score in scores]
         cv_avg[name] = np.mean(scores)
         
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
+        # Finding the biggest R²
+        best_fold_index = np.argmax(scores)
+        
+        best_model_from_cv = estimators[best_fold_index]
+        
+        y_pred = best_model_from_cv.predict(X_test)
         
         results[name] = r2_score(y_test, y_pred)
-        trained_models[name] = model
+        trained_models[name] = best_model_from_cv
         
     return results, trained_models, cv_scores, cv_avg
 
@@ -68,35 +76,44 @@ def train_classification(X_train, X_test, y_train, y_test, selected_models, k_fo
     
     models = {name: all_models[name] for name in selected_models}
     
-    # Stratified K-Fold usando os parâmetros do usuário
     skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=random_seed)
     
     results, trained_models, cv_scores, cv_avg = {}, {}, {}, {}
     
     for name, model in models.items():
-        scores = cross_val_score(model, X_train, y_train, cv=skf, scoring='accuracy')
+        # cross_validate retorna um dicionário com os scores e os modelos treinados em cada fold
+        cv_results = cross_validate(model, X_train, y_train, cv=skf, scoring='accuracy', return_estimator=True)
+        
+        scores = cv_results['test_score']
+        estimators = cv_results['estimator']
+        
+        # Salvando as métricas para a tabela
         cv_scores[name] = [round(score, 4) for score in scores]
         cv_avg[name] = np.mean(scores)
         
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
+        # Encontrando o índice do Fold que teve a maior Acurácia
+        best_fold_index = np.argmax(scores)
         
-        results[name] = accuracy_score(y_test, y_pred) 
-        trained_models[name] = model
+        # Capturando o modelo exato que treinou nessa melhor partição
+        best_model_from_cv = estimators[best_fold_index]
+        
+        # Usando este modelo campeão para prever o conjunto de Teste final (Mundo Real)
+        y_pred = best_model_from_cv.predict(X_test)
+        
+        results[name] = accuracy_score(y_test, y_pred)
+        trained_models[name] = best_model_from_cv
         
     return results, trained_models, cv_scores, cv_avg
 
 # PCE MODEL
-def run_pce(X_train, y_train, X_test, y_test, max_degree=3):
+def run_pce(X_train, y_train, max_degree=3):
     """
-    Builds PCE surrogates using LSTSQ, LASSO and Ridge.
+    Builds PCE surrogate using LSTSQ.
     Ensures conversion to float64 to avoid errors in Legendre functions.
     """
     # 0. Critical Treatment: Forcing float type for UQpy to accept the data
     X_train_np = X_train.values.astype(float)
     y_train_np = y_train.values.astype(float)
-    X_test_np = X_test.values.astype(float)
-    y_val_real = y_test.values.astype(float).flatten()
 
     # 1. Configuring the Joint Distribution
     num_variables = X_train_np.shape[1]
@@ -109,32 +126,11 @@ def run_pce(X_train, y_train, X_test, y_test, max_degree=3):
     polynomial_basis = TotalDegreeBasis(joint, max_degree)
     
     pce_models = {}
-    error_results = {}
     
     # 3. Training: Least Squares (LSTSQ)
     ls_pce = PolynomialChaosExpansion(polynomial_basis=polynomial_basis, regression_method=LeastSquareRegression())
     ls_pce.fit(X_train_np, y_train_np)
     pce_models['PCE - Least Squares'] = ls_pce
     
-    # 4. Training: LASSO
-    lasso_pce = PolynomialChaosExpansion(polynomial_basis=polynomial_basis, regression_method=LassoRegression())
-    lasso_pce.fit(X_train_np, y_train_np)
-    pce_models['PCE - LASSO'] = lasso_pce
-    
-    # 5. Training: Ridge
-    ridge_pce = PolynomialChaosExpansion(polynomial_basis=polynomial_basis, regression_method=RidgeRegression())
-    ridge_pce.fit(X_train_np, y_train_np)
-    pce_models['PCE - Ridge'] = ridge_pce
-    
-    # 6. Validation (Relative Error Calculation)
-    n_samples_val = len(X_test_np)
-    
-    for name, model in pce_models.items():
-        # Flattened prediction
-        y_pred = model.predict(X_test_np).flatten()
-        
-        # Validation error
-        error = np.sum(np.abs(y_pred - y_val_real) / (np.abs(y_val_real) + 1e-8)) / n_samples_val
-        error_results[name] = error
-        
-    return error_results, pce_models
+    # Retorna apenas o dicionário com o modelo treinado
+    return pce_models

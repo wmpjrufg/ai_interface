@@ -113,9 +113,9 @@ if uploaded_file is not None:
     st.subheader("📊 2. Exploratory Data Analysis (EDA)")
     tab_data, tab_statistics = st.tabs(["Data Overview", "Descriptive Statistics"])
     with tab_data:
-        st.dataframe(df.head(), use_container_width=True)
+        st.dataframe(df.head(), width="stretch")
     with tab_statistics:
-        st.dataframe(df.describe(include='all'), use_container_width=True)
+        st.dataframe(df.describe(include='all'), width="stretch")
 
     st.subheader("🎯 3. Model Configuration")
     
@@ -147,7 +147,13 @@ if uploaded_file is not None:
             with cols_map[i % len(cols_map)]:
                 y_mapping[cat] = st.number_input(f"Value for: '{cat}'", value=int(i), key=f"map_{cat}")
 
+    if "modelo_treinado" not in st.session_state:
+        st.session_state.modelo_treinado = False
+
     if st.button("🚀 Prepare Data and Train", type="primary", use_container_width=True):
+        st.session_state.modelo_treinado = True
+
+    if st.session_state.modelo_treinado:
         if not col_x or not col_y:
             st.error("Select input and output variables.")
         elif section != "PCE MODEL" and not chosen_models:
@@ -177,17 +183,24 @@ if uploaded_file is not None:
                 if section == "AI REGRESSION":
                     results, models, cv_scores, cv_avg = train_regression(X_train, X_test, y_train, y_test, chosen_models, k_folds, random_seed)
                     
-                    table_data = [{"Model": n, "Test R²": results[n], f"Mean R² (CV-{k_folds})": cv_avg[n], f"CV-{k_folds} Scores": str(cv_scores[n])} for n in results.keys()]
-                    df_res = pd.DataFrame(table_data).sort_values(by="Test R²", ascending=False)
+                    # table_data = [{"Model": n, "Test R²": results[n], f"Mean R² (CV-{k_folds})": cv_avg[n], f"CV-{k_folds} Scores": str(cv_scores[n])} for n in results.keys()]
+                    table_data = [{"Model": n, f"Mean R² (CV-{k_folds})": cv_avg[n], f"CV-{k_folds} Scores": str(cv_scores[n])} for n in cv_avg.keys()]
+                    #df_res = pd.DataFrame(table_data).sort_values(by="Test R²", ascending=False)
+                    df_res = pd.DataFrame(table_data).sort_values(by=f"Mean R² (CV-{k_folds})", ascending=False)
                     
                     best_model = df_res.iloc[0]["Model"]
                     champion_model = models[best_model]
                     
-                    met_col1, met_col2, met_col3, met_col4 = st.columns(4)
-                    met_col1.metric("Best Model", best_model)
-                    met_col2.metric("R² (Test Split)", f"{df_res.iloc[0]['Test R²']:.4f}")
-                    met_col3.metric(f"R² (Mean CV-{k_folds})", f"{df_res.iloc[0][f'Mean R² (CV-{k_folds})']:.4f}")
-                    met_col4.metric("Samples (Train | Test)", f"{len(X_train)} | {len(X_test)}")
+                    # met_col1, met_col2, met_col3, met_col4 = st.columns(4)
+                    # met_col1.metric("Best Model", best_model)
+                    # met_col2.metric("R² (Test Split)", f"{df_res.iloc[0]['Test R²']:.4f}")
+                    # met_col3.metric(f"R² (Mean CV-{k_folds})", f"{df_res.iloc[0][f'Mean R² (CV-{k_folds})']:.4f}")
+                    # met_col4.metric("Samples (Train | Test)", f"{len(X_train)} | {len(X_test)}")
+                    
+                    met_col1, met_col2, met_col3 = st.columns(3)
+                    met_col1.metric("**Best Model**", best_model)
+                    met_col2.metric(f"**R² (Mean CV-{k_folds})**", f"{df_res.iloc[0][f'Mean R² (CV-{k_folds})']:.4f}")
+                    met_col3.metric("**Samples (Train | Test)**", f"{len(X_train)} | {len(X_test)}")
                     
                     st.divider()
                     
@@ -196,13 +209,13 @@ if uploaded_file is not None:
                     
                     with col_table:
                         st.write("**Ranking of Tested Models:**")
-                        st.dataframe(df_res, use_container_width=True, hide_index=True, height=320)
+                        st.dataframe(df_res, width="stretch", hide_index=True, height=320)
                             
                     with col_plot:
                         st.write(f"**Visual Comparison: {best_model}**")
                         y_pred_champion = champion_model.predict(X_test)
-                        fig = plot_real_vs_predicted(y_test, y_pred_champion, df_res.iloc[0]['Test R²'])
-                        st.pyplot(fig, use_container_width=True) 
+                        fig = plot_real_vs_predicted(y_test, y_pred_champion, results[best_model])
+                        st.pyplot(fig, width="stretch") 
                     
                     # ROW 2: Export Buttons
                     st.write("**Export:**")
@@ -218,7 +231,7 @@ if uploaded_file is not None:
                             data=buffer_model, 
                             file_name=f"reg_{best_model.replace(' ', '_').lower()}.pkl", 
                             mime="application/octet-stream", 
-                            use_container_width=True
+                            width="stretch"
                         )
                         
                     with col_btn2:
@@ -230,24 +243,32 @@ if uploaded_file is not None:
                             data=buf.getvalue(), 
                             file_name="predicted.png", 
                             mime="image/png", 
-                            use_container_width=True
+                            width="stretch"
                         )
 
                 # MODULE: CLASSIFICATION
                 elif section == "AI CLASSIFICATION":
                     results, models, cv_scores, cv_avg = train_classification(X_train, X_test, y_train, y_test, chosen_models, k_folds, random_seed)
                     
-                    table_data = [{"Model": n, "Test Accuracy": results[n], f"Mean Accuracy (CV-{k_folds})": cv_avg[n], f"CV-{k_folds} Scores": str(cv_scores[n])} for n in results.keys()]
-                    df_res = pd.DataFrame(table_data).sort_values(by="Test Accuracy", ascending=False)
+                    #table_data = [{"Model": n, "Test Accuracy": results[n], f"Mean Accuracy (CV-{k_folds})": cv_avg[n], f"CV-{k_folds} Scores": str(cv_scores[n])} for n in results.keys()]
+                    table_data = [{"Model": n, f"Mean Accuracy (CV-{k_folds})": cv_avg[n], f"CV-{k_folds} Scores": str(cv_scores[n])} for n in cv_avg.keys()]
+                    #df_res = pd.DataFrame(table_data).sort_values(by="Test Accuracy", ascending=False)
+                    df_res = pd.DataFrame(table_data).sort_values(by=f"Mean Accuracy (CV-{k_folds})", ascending=False)
+                    
                     
                     best_model = df_res.iloc[0]["Model"]
                     champion_model = models[best_model]
                     
-                    met_col1, met_col2, met_col3, met_col4 = st.columns(4)
+                    # met_col1, met_col2, met_col3, met_col4 = st.columns(4)
+                    # met_col1.metric("Best Model", best_model)
+                    # met_col2.metric("Accuracy (Test)", f"{df_res.iloc[0]['Test Accuracy']:.4f}")
+                    # met_col3.metric(f"Accuracy (Mean CV-{k_folds})", f"{df_res.iloc[0][f'Mean Accuracy (CV-{k_folds})']:.4f}")
+                    # met_col4.metric("Samples (Train | Test)", f"{len(X_train)} | {len(X_test)}")
+                    
+                    met_col1, met_col2, met_col3 = st.columns(3)
                     met_col1.metric("Best Model", best_model)
-                    met_col2.metric("Accuracy (Test)", f"{df_res.iloc[0]['Test Accuracy']:.4f}")
-                    met_col3.metric(f"Accuracy (Mean CV-{k_folds})", f"{df_res.iloc[0][f'Mean Accuracy (CV-{k_folds})']:.4f}")
-                    met_col4.metric("Samples (Train | Test)", f"{len(X_train)} | {len(X_test)}")
+                    met_col2.metric(f"Accuracy (Mean CV-{k_folds})", f"{df_res.iloc[0][f'Mean Accuracy (CV-{k_folds})']:.4f}")
+                    met_col3.metric("Samples (Train | Test)", f"{len(X_train)} | {len(X_test)}")
                     
                     st.divider()
                     
@@ -256,15 +277,14 @@ if uploaded_file is not None:
                     
                     with col_table:
                         st.write("**Ranking of Tested Models:**")
-                        st.dataframe(df_res, use_container_width=True, hide_index=True, height=320)
+                        st.dataframe(df_res, width="stretch", hide_index=True, height=320)
                             
                     with col_plot:
                         st.write(f"**Visual Comparison: {best_model}**")
                         y_pred_champion = champion_model.predict(X_test)
                         
-                        # Plotting Confusion Matrix
-                        fig = plot_confusion_matrix(y_test, y_pred_champion, df_res.iloc[0]['Test Accuracy'])
-                        st.pyplot(fig, use_container_width=True) 
+                        fig = plot_confusion_matrix(y_test, y_pred_champion, results[best_model])
+                        st.pyplot(fig, width="stretch") 
                     
                     # ROW 2: Export Buttons
                     st.write("**Export:**")
@@ -280,7 +300,7 @@ if uploaded_file is not None:
                             data=buffer_model, 
                             file_name=f"class_{best_model.replace(' ', '_').lower()}.pkl", 
                             mime="application/octet-stream", 
-                            use_container_width=True
+                            width="stretch"
                         )
                         
                     with col_btn2:
@@ -292,17 +312,16 @@ if uploaded_file is not None:
                             data=buf.getvalue(), 
                             file_name="confusion_matrix.png", 
                             mime="image/png", 
-                            use_container_width=True
+                            width="stretch"
                         )
 
                 # MODULE: PCE
                 elif section == "PCE MODEL":
                     st.info("Training Polynomial Chaos Expansion (Maximum degree: 3)")
                     try:
-                        error_results, models = run_pce(X_train, y_train, X_test, y_test, max_degree=3)
-                        df_res = pd.DataFrame(list(error_results.items()), columns=["Method", "Relative Error"]).sort_values(by="Relative Error", ascending=True)
+                        models = run_pce(X_train, y_train, max_degree=3)
                         
-                        best_model = df_res.iloc[0]["Method"]
+                        best_model = "PCE - Least Squares"
                         champion_model = models[best_model]
                         
                         X_test_np = X_test.values.astype(float)
@@ -310,29 +329,20 @@ if uploaded_file is not None:
                         y_pred_champion = champion_model.predict(X_test_np).flatten()
                         r2_pce = r2_score(y_test_np, y_pred_champion)
                         
-                        met_col1, met_col2, met_col3, met_col4 = st.columns(4)
+                        met_col1, met_col2, met_col3 = st.columns(3)
                         met_col1.metric("Best Model", best_model)
-                        met_col2.metric("Relative Error", f"{df_res.iloc[0]['Relative Error']:.4f}")
-                        met_col3.metric("R² (Test)", f"{r2_pce:.4f}")
-                        met_col4.metric("Samples (Train | Test)", f"{len(X_train)} | {len(X_test)}")
+                        met_col2.metric("R² (Test)", f"{r2_pce:.4f}")
+                        met_col3.metric("Samples (Train | Test)", f"{len(X_train)} | {len(X_test)}")
                         
                         st.divider()
                         
-                        # ROW 1: Table and Plot
-                        col_table, col_plot = st.columns([1.5, 1], gap="large")
+                        st.write(f"**Visual Comparison: {best_model}**")
                         
-                        with col_table:
-                            st.write("**Ranking of Tested Models:**")
-                            st.dataframe(df_res, use_container_width=True, hide_index=True, height=320)
-                                
-                        with col_plot:
-                            st.write(f"**Visual Comparison: {best_model}**")
-                            fig = plot_real_vs_predicted(y_test_np, y_pred_champion, r2_pce)
-                            st.pyplot(fig, use_container_width=True) 
+                        fig = plot_real_vs_predicted(y_test_np, y_pred_champion, r2_pce)
+                        st.pyplot(fig, width=600)
                             
-                        # ROW 2: Export Buttons
                         st.write("**Export:**")
-                        col_btn1, col_btn2 = st.columns([1.5, 1], gap="large")
+                        col_btn1, col_btn2 = st.columns(2, gap="large")
                         
                         with col_btn1:
                             buffer_model = io.BytesIO()
@@ -342,20 +352,21 @@ if uploaded_file is not None:
                             st.download_button(
                                 label="📦 Download Best Model (.pkl)", 
                                 data=buffer_model, 
-                                file_name=f"pce_{best_model.replace(' ', '_').lower()}.pkl", 
+                                file_name="pce_lstsq.pkl", 
                                 mime="application/octet-stream", 
-                                use_container_width=True
+                                width="stretch"
                             )
                             
                         with col_btn2:
                             buf = io.BytesIO()
                             fig.savefig(buf, format="png", dpi=600, bbox_inches='tight')
+                            
                             st.download_button(
                                 label="📥 Download Plot (600 DPI)", 
                                 data=buf.getvalue(), 
                                 file_name="pce_predicted.png", 
                                 mime="image/png", 
-                                use_container_width=True
+                                width="stretch"
                             )
                                 
                     except Exception as e:
