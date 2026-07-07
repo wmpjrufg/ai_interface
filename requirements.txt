@@ -1,9 +1,10 @@
-dill==0.4.1
-matplotlib==3.8.4
-numpy==2.5.1
-pandas==3.0.3
-scikit_learn==1.4.2
-seaborn==0.13.2
 streamlit==1.52.2
+pandas==3.0.3
+numpy==2.5.1
+matplotlib==3.8.4
+seaborn==0.13.2
+scikit-learn==1.4.2
+dill==0.4.1
 UQpy==4.2.1
-UQpy==4.2.1
+openpyxl
+setuptools

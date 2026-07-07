@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import io
 import dill as pickle 
+import sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, confusion_matrix
 
@@ -150,6 +151,8 @@ if uploaded_file is not None:
     if "modelo_treinado" not in st.session_state:
         st.session_state.modelo_treinado = False
 
+    st.write(sklearn.__version__)
+    
     if st.button("🚀 Prepare Data and Train", type="primary", use_container_width=True):
         st.session_state.modelo_treinado = True
 
