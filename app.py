@@ -151,7 +151,6 @@ if uploaded_file is not None:
     if "modelo_treinado" not in st.session_state:
         st.session_state.modelo_treinado = False
 
-    st.write(sklearn.__version__)
     
     if st.button("🚀 Prepare Data and Train", type="primary", use_container_width=True):
         st.session_state.modelo_treinado = True
