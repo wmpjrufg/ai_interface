@@ -1,10 +1,10 @@
 streamlit==1.52.2
-pandas==3.0.3
-numpy==2.5.1
+pandas==2.2.3
+numpy==1.26.4
 matplotlib==3.8.4
 seaborn==0.13.2
 scikit-learn==1.4.2
 dill==0.4.1
 UQpy==4.2.1
 openpyxl
-setuptools
+setuptools==80.9.0
