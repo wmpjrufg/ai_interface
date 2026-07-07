@@ -2,20 +2,19 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import io
-import dill as pickle
 import seaborn as sns
-from sklearn.metrics import r2_score
+import io
+import dill as pickle 
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, confusion_matrix
 
-# Importando as funções do seu arquivo defs.py
-from defs import treinar_regressao, treinar_classificacao, rodar_pce
+# Importing functions from defs.py
+from defs import train_regression, train_classification, run_pce
 
-st.set_page_config(page_title="Central de Machine Learning", layout="wide")
+st.set_page_config(page_title="Machine Learning Platform", layout="wide")
 
-# FUNÇÃO DE PLOTAGEM
-def plot_real_vs_previsto(y_real, y_pred, r2_val, label_x='Observado', label_y='Previsto'):
-    """Gera o gráfico com as configurações de DPI e dimensões informadas."""
+# PLOTTING FUNCTIONS
+def plot_real_vs_predicted(y_real, y_pred, r2_val, label_x='Observed', label_y='Predicted'):
     # Chart dimensions (in centimeters)
     b_cm = 12
     h_cm = 8
@@ -73,310 +72,291 @@ def plot_real_vs_previsto(y_real, y_pred, r2_val, label_x='Observado', label_y='
 
     return fig
 
-def plot_correlation_heatmap(corr_matrix):
-    """Gera o heatmap de correlação com as configurações de DPI e dimensões informadas."""
-    # Chart dimensions (in centimeters)
-    b_cm = 12
-    h_cm = 8
+def plot_confusion_matrix(y_real, y_pred, acc_val):
+    b_cm, h_cm = 12, 8
     inches_to_cm = 1 / 2.54
-    b_input = b_cm * inches_to_cm
-    h_input = h_cm * inches_to_cm
-
-    # Axis and labels
-    size_axis = 12
-    color_axis = 'black'
-
-    # Cmap
-    cmap = 'seismic'
-    fmt = ".2f"
-    anot = True
-    alpha = 0.5
-    color_annot = 'black'
-
-    # Figure
-    fig, ax = plt.subplots(figsize=(b_input, h_input))
-    ax.tick_params(axis='both', which='major', labelsize=size_axis, colors=color_axis)
-
-    # Plot data
-    # Passamos o 'ax=ax' para garantir que o seaborn desenhe na figura correta
-    sns.heatmap(corr_matrix, 
-                annot=anot, 
-                fmt=fmt, 
-                cmap=cmap, 
-                alpha=alpha, 
-                annot_kws={"color": color_annot},
-                ax=ax)
-
+    fig, ax = plt.subplots(figsize=(b_cm * inches_to_cm, h_cm * inches_to_cm))
+    
+    cm = confusion_matrix(y_real, y_pred)
+    sns.heatmap(cm, annot=True, fmt='g', cmap='Blues', cbar=False, ax=ax, annot_kws={"size": 12})
+    
+    ax.set_title(f"Confusion Matrix (Accuracy: {acc_val:.4f})", fontsize=14, pad=15)
+    ax.set_xlabel('Model Prediction', fontsize=12)
+    ax.set_ylabel('Actual Class', fontsize=12)
     return fig
 
-# MENU LATERAL (SIDEBAR)
+# SIDEBAR NAVIGATION
 with st.sidebar:
-    st.title("⚙️ Navegação")
-    secao = st.radio("Módulos:", ["IA REGRESSION", "IA CLASSIFICATION", "PCE MODEL"])
+    st.title("⚙️ Navigation")
+    section = st.radio("Modules:", ["AI REGRESSION", "AI CLASSIFICATION", "PCE MODEL"])
     
     st.divider()
-    test_size_percent = st.slider("Tamanho da Partição de Teste (%)", min_value=10, max_value=50, value=20, step=5)
+    st.write("**Hyperparameters**")
+    test_size_percent = st.slider("Test Size (%)", min_value=10, max_value=50, value=20, step=5)
     test_size = test_size_percent / 100.0
+    
+    k_folds = st.number_input("Number of Folds (CV)", min_value=2, max_value=20, value=5, step=1)
+    random_seed = st.number_input("Random Seed", value=42, step=1)
 
-# ÁREA PRINCIPAL
-st.title(f"Central: {secao}")
+# MAIN AREA
+st.title(f"Hub: {section}")
 
-# UPLOAD DE DADOS
-st.subheader("📂 1. Upload do Dataset")
-arquivo_upload = st.file_uploader("Envie seu arquivo CSV ou Excel", type=["csv", "xlsx"])
+st.subheader("📂 1. Dataset Upload")
+uploaded_file = st.file_uploader("Upload your CSV or Excel file", type=["csv", "xlsx"])
 
-if arquivo_upload is not None:
-    # Leitura do arquivo
-    if arquivo_upload.name.endswith('.csv'):
-        df = pd.read_csv(arquivo_upload)
+if uploaded_file is not None:
+    if uploaded_file.name.endswith('.csv'):
+        df = pd.read_csv(uploaded_file)
     else:
-        df = pd.read_excel(arquivo_upload)
+        df = pd.read_excel(uploaded_file)
 
-    # ANÁLISE EXPLORATÓRIA (EDA)
-    st.subheader("📊 2. Análise Exploratória (EDA)")
-    
-    # Criando 3 abas agora
-    tab_dados, tab_estatisticas, tab_correlacao = st.tabs(["Visão dos Dados", "Estatísticas Descritivas", "Matriz de Correlação"])
-    
-    with tab_dados:
+    st.subheader("📊 2. Exploratory Data Analysis (EDA)")
+    tab_data, tab_statistics = st.tabs(["Data Overview", "Descriptive Statistics"])
+    with tab_data:
         st.dataframe(df.head(), use_container_width=True)
-        
-    with tab_estatisticas:
+    with tab_statistics:
         st.dataframe(df.describe(include='all'), use_container_width=True)
-        
-    with tab_correlacao:
-        # A correlação só funciona com números. Selecionamos apenas as colunas numéricas:
-        df_numeric = df.select_dtypes(include=[np.number])
-        
-        if not df_numeric.empty and len(df_numeric.columns) > 1:
-            st.write("**Mapa de Calor (Correlação de Pearson):**")
-            corr_matrix = df_numeric.corr()
-            
-            # Chama a sua função de plotagem
-            fig_corr = plot_correlation_heatmap(corr_matrix)
-            st.pyplot(fig_corr)
-            
-            # Configuração do botão de download
-            buf_corr = io.BytesIO()
-            fig_corr.savefig(buf_corr, format="png", dpi=600, bbox_inches='tight')
-            nome_dataset = arquivo_upload.name.rsplit('.', 1)[0]
-            
-            st.download_button(
-                label="📥 Baixar Heatmap de Correlação (600 DPI)",
-                data=buf_corr.getvalue(),
-                file_name=f"{nome_dataset}_correlation_heatmap.png",
-                mime="image/png"
-            )
-        else:
-            st.info("Não há colunas numéricas suficientes para gerar a matriz de correlação no momento. Caso possua colunas categóricas, faça o tratamento e mapeamento primeiro.")
 
-    # DEFINIÇÃO DE VARIÁVEIS
-    st.subheader("🎯 3. Configuração do Modelo")
-    colunas = df.columns.tolist()
+    st.subheader("🎯 3. Model Configuration")
     
+    # Manual selection of models
+    chosen_models = []
+    if section == "AI REGRESSION":
+        all_options = ["Linear Regression", "Non-Linear Regression (Degree 2)", "Decision Tree", "Random Forest", "Gradient Boosting"]
+        chosen_models = st.multiselect("Choose algorithms to test:", all_options, default=all_options)
+    elif section == "AI CLASSIFICATION":
+        all_options = ["Logistic Regression", "Decision Tree", "Random Forest", "Gradient Boosting"]
+        chosen_models = st.multiselect("Choose algorithms to test:", all_options, default=all_options)
+        
+    columns = df.columns.tolist()
     col1, col2 = st.columns(2)
     with col1:
-        col_x = st.multiselect("Variáveis Preditoras (Entrada - X):", colunas, default=[c for c in colunas if c != colunas[-1]])
+        col_x = st.multiselect("Predictor Variables (Input - X):", columns, default=[c for c in columns if c != columns[-1]])
     with col2:
-        col_y = st.selectbox("Variável Alvo (Saída - y):", colunas, index=len(colunas)-1)
+        col_y = st.selectbox("Target Variable (Output - y):", columns, index=len(columns)-1)
     
-    y_bruto = df[col_y]
-    mapeamento_y = None
+    y_raw = df[col_y]
+    y_mapping = None
     
-    if y_bruto.dtype == 'object' or pd.api.types.is_string_dtype(y_bruto) or pd.api.types.is_categorical_dtype(y_bruto):
-        st.warning(f"⚠️ A variável alvo '{col_y}' é texto. Defina o valor correspondente para cada categoria abaixo:")
-        categorias_unicas = y_bruto.dropna().unique()
-        
-        # Cria colunas dinâmicas dependendo da quantidade de categorias
-        cols_map = st.columns(len(categorias_unicas))
-        mapeamento_y = {}
-        
-        for i, cat in enumerate(categorias_unicas):
+    if y_raw.dtype == 'object' or pd.api.types.is_string_dtype(y_raw) or pd.api.types.is_categorical_dtype(y_raw):
+        st.warning(f"⚠️ Target variable '{col_y}' is text. Define the corresponding value below:")
+        unique_categories = y_raw.dropna().unique()
+        cols_map = st.columns(len(unique_categories))
+        y_mapping = {}
+        for i, cat in enumerate(unique_categories):
             with cols_map[i % len(cols_map)]:
-                valor = st.number_input(f"Valor para: '{cat}'", value=int(i), key=f"map_{cat}")
-                mapeamento_y[cat] = valor
+                y_mapping[cat] = st.number_input(f"Value for: '{cat}'", value=int(i), key=f"map_{cat}")
 
-    if st.button("Preparar Dados e Treinar", type="primary", use_container_width=True):
+    if st.button("🚀 Prepare Data and Train", type="primary", use_container_width=True):
         if not col_x or not col_y:
-            st.error("Por favor, selecione as variáveis de entrada e saída.")
+            st.error("Select input and output variables.")
+        elif section != "PCE MODEL" and not chosen_models:
+            st.error("Select at least one model to test.")
         else:
-            with st.spinner("Treinando modelos..."):
-                # Preparação e Tratamento
+            with st.spinner("Training models..."):
                 X = df[col_x]
                 X = pd.get_dummies(X, drop_first=True)
-                
                 y = df[col_y].copy()
                 
-                # Se houver mapeamento configurado, aplica na variável alvo
-                if mapeamento_y is not None:
-                    y = y.map(mapeamento_y)
-                    
-                # Checagem de segurança após o mapeamento
-                if y.isna().any():
-                    st.error("Atenção: A variável alvo contém valores nulos após o mapeamento. Limpe os dados antes de treinar.")
+                if y_mapping is not None:
+                    y = y.map(y_mapping)
+                    if y.isna().any():
+                        st.error("Warning: Target variable contains null values after mapping.")
+                        st.stop()
+                
+                if section in ["AI REGRESSION", "PCE MODEL"] and (y.dtype == 'object' or pd.api.types.is_string_dtype(y)):
+                    st.error(f"Error: For {section}, the target variable (y) must be numerical.")
                     st.stop()
                 
-                # Para garantir que não passe nada indevido
-                if secao in ["IA REGRESSION", "PCE MODEL"] and (y.dtype == 'object' or pd.api.types.is_string_dtype(y)):
-                    st.error(f"Erro: Para {secao}, a variável alvo (y) deve ser numérica. O mapeamento falhou ou não foi aplicado.")
-                    st.stop()
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_seed)
                 
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
-                
-                # ASHBOARD DE RESULTADOS
                 st.divider()
-                st.subheader("🏆 4. Dashboard de Resultados")
+                st.subheader("🏆 4. Results Dashboard")
                 
-                if secao == "IA REGRESSION":
-                    # Treina e obtém os resultados de todos os modelos
-                    resultados, modelos = treinar_regressao(X_train, X_test, y_train, y_test)
+                # MODULE: REGRESSION
+                if section == "AI REGRESSION":
+                    results, models, cv_scores, cv_avg = train_regression(X_train, X_test, y_train, y_test, chosen_models, k_folds, random_seed)
                     
-                    # Cria o dataframe com o ranking
-                    df_res = pd.DataFrame(list(resultados.items()), columns=["Modelo", "R² no Teste"]).sort_values(by="R² no Teste", ascending=False)
-                    melhor_mod = df_res.iloc[0]["Modelo"]
-                    melhor_r2 = df_res.iloc[0]["R² no Teste"]
-                    modelo_campeao = modelos[melhor_mod]
+                    table_data = [{"Model": n, "Test R²": results[n], f"Mean R² (CV-{k_folds})": cv_avg[n], f"CV-{k_folds} Scores": str(cv_scores[n])} for n in results.keys()]
+                    df_res = pd.DataFrame(table_data).sort_values(by="Test R²", ascending=False)
                     
-                    # Cards de Métricas Rápidas
+                    best_model = df_res.iloc[0]["Model"]
+                    champion_model = models[best_model]
+                    
                     met_col1, met_col2, met_col3, met_col4 = st.columns(4)
-                    met_col1.metric("Melhor Modelo", melhor_mod)
-                    met_col2.metric("R² (Partição de Teste)", f"{melhor_r2:.4f}")
-                    met_col3.metric("Amostras de Treino", len(X_train))
-                    met_col4.metric("Amostras de Teste", len(X_test))
-                    
+                    met_col1.metric("Best Model", best_model)
+                    met_col2.metric("R² (Test Split)", f"{df_res.iloc[0]['Test R²']:.4f}")
+                    met_col3.metric(f"R² (Mean CV-{k_folds})", f"{df_res.iloc[0][f'Mean R² (CV-{k_folds})']:.4f}")
+                    met_col4.metric("Samples (Train | Test)", f"{len(X_train)} | {len(X_test)}")
                     
                     st.divider()
                     
-                    # DIVISÃO DA TELA: TABELA À ESQUERDA, GRÁFICO (MENOR) À DIREITA
-                    # A proporção [1.5, 1] faz a coluna da direita ser menor, encolhendo o gráfico visualmente
-                    col_tabela, col_grafico = st.columns([1.5, 1], gap="large")
+                    # ROW 1: Table and Plot
+                    col_table, col_plot = st.columns([1.5, 1], gap="large")
                     
-                    with col_tabela:
-                        st.write("**Ranking dos Modelos Testados:**")
-                        st.dataframe(df_res, use_container_width=True, hide_index=True)
-                        
-                        st.write("**Exportação:**")
-                        col_btn1, col_btn2 = st.columns(2)
-                        
-                        # Download do .pkl
-                        buffer_modelo = io.BytesIO()
-                        pickle.dump(modelo_campeao, buffer_modelo)
-                        buffer_modelo.seek(0)
-                        nome_dataset = arquivo_upload.name.rsplit('.', 1)[0]
-                        
-                        with col_btn1:
-                            st.download_button(
-                                label="📦 Baixar Melhor Modelo (.pkl)",
-                                data=buffer_modelo,
-                                file_name=f"{nome_dataset}_{melhor_mod}.pkl",
-                                mime="application/octet-stream",
-                                use_container_width=True
-                            )
+                    with col_table:
+                        st.write("**Ranking of Tested Models:**")
+                        st.dataframe(df_res, use_container_width=True, hide_index=True, height=320)
                             
-                    with col_grafico:
-                        st.write(f"**Comparação Visual: {melhor_mod}**")
-                        y_pred_campeao = modelo_campeao.predict(X_test)
-                        
-                        # Gera e exibe o gráfico apenas para o campeão
-                        fig = plot_real_vs_previsto(y_test, y_pred_campeao, melhor_r2)
-                        # Ao usar use_container_width=True dentro da coluna menor, a imagem encolhe
+                    with col_plot:
+                        st.write(f"**Visual Comparison: {best_model}**")
+                        y_pred_champion = champion_model.predict(X_test)
+                        fig = plot_real_vs_predicted(y_test, y_pred_champion, df_res.iloc[0]['Test R²'])
                         st.pyplot(fig, use_container_width=True) 
+                    
+                    # ROW 2: Export Buttons
+                    st.write("**Export:**")
+                    col_btn1, col_btn2 = st.columns([1.5, 1], gap="large")
+                    
+                    with col_btn1:
+                        buffer_model = io.BytesIO()
+                        pickle.dump(champion_model, buffer_model)
+                        buffer_model.seek(0)
                         
-                        # Botão para baixar a imagem em alta resolução
+                        st.download_button(
+                            label="📦 Download Best Model (.pkl)", 
+                            data=buffer_model, 
+                            file_name=f"reg_{best_model.replace(' ', '_').lower()}.pkl", 
+                            mime="application/octet-stream", 
+                            use_container_width=True
+                        )
+                        
+                    with col_btn2:
                         buf = io.BytesIO()
                         fig.savefig(buf, format="png", dpi=600, bbox_inches='tight')
                         
-                        with col_btn2: # Coloca o botão de imagem ao lado do botão do pkl na coluna da esquerda
-                            st.download_button(
-                                label="📥 Baixar Gráfico (600 DPI)",
-                                data=buf.getvalue(),
-                                file_name=f"{nome_dataset}_predicted_vs_observed.png",
-                                mime="image/png",
-                                use_container_width=True
-                            )
-                elif secao == "IA CLASSIFICATION":
-                    # Chama a função que treina classificação no defs.py
-                    resultados, modelos = treinar_classificacao(X_train, X_test, y_train, y_test)
+                        st.download_button(
+                            label="📥 Download Plot (600 DPI)", 
+                            data=buf.getvalue(), 
+                            file_name="predicted.png", 
+                            mime="image/png", 
+                            use_container_width=True
+                        )
+
+                # MODULE: CLASSIFICATION
+                elif section == "AI CLASSIFICATION":
+                    results, models, cv_scores, cv_avg = train_classification(X_train, X_test, y_train, y_test, chosen_models, k_folds, random_seed)
                     
-                    # Mostra a tabela de Acurácia
-                    df_res = pd.DataFrame(list(resultados.items()), columns=["Modelo", "Acurácia no Teste"]).sort_values(by="Acurácia no Teste", ascending=False)
-                    st.dataframe(df_res, use_container_width=True, hide_index=True)
+                    table_data = [{"Model": n, "Test Accuracy": results[n], f"Mean Accuracy (CV-{k_folds})": cv_avg[n], f"CV-{k_folds} Scores": str(cv_scores[n])} for n in results.keys()]
+                    df_res = pd.DataFrame(table_data).sort_values(by="Test Accuracy", ascending=False)
                     
-                    melhor_mod = df_res.iloc[0]["Modelo"]
-                    st.success(f"**Melhor modelo:** {melhor_mod} com Acurácia = {df_res.iloc[0]['Acurácia no Teste']:.4f}")
+                    best_model = df_res.iloc[0]["Model"]
+                    champion_model = models[best_model]
                     
-                elif secao == "PCE MODEL":
-                    st.info("Treinando Polynomial Chaos Expansion (Grau máximo: 3)")
+                    met_col1, met_col2, met_col3, met_col4 = st.columns(4)
+                    met_col1.metric("Best Model", best_model)
+                    met_col2.metric("Accuracy (Test)", f"{df_res.iloc[0]['Test Accuracy']:.4f}")
+                    met_col3.metric(f"Accuracy (Mean CV-{k_folds})", f"{df_res.iloc[0][f'Mean Accuracy (CV-{k_folds})']:.4f}")
+                    met_col4.metric("Samples (Train | Test)", f"{len(X_train)} | {len(X_test)}")
                     
+                    st.divider()
+                    
+                    # ROW 1: Table and Plot
+                    col_table, col_plot = st.columns([1.5, 1], gap="large")
+                    
+                    with col_table:
+                        st.write("**Ranking of Tested Models:**")
+                        st.dataframe(df_res, use_container_width=True, hide_index=True, height=320)
+                            
+                    with col_plot:
+                        st.write(f"**Visual Comparison: {best_model}**")
+                        y_pred_champion = champion_model.predict(X_test)
+                        
+                        # Plotting Confusion Matrix
+                        fig = plot_confusion_matrix(y_test, y_pred_champion, df_res.iloc[0]['Test Accuracy'])
+                        st.pyplot(fig, use_container_width=True) 
+                    
+                    # ROW 2: Export Buttons
+                    st.write("**Export:**")
+                    col_btn1, col_btn2 = st.columns([1.5, 1], gap="large")
+                    
+                    with col_btn1:
+                        buffer_model = io.BytesIO()
+                        pickle.dump(champion_model, buffer_model)
+                        buffer_model.seek(0)
+                        
+                        st.download_button(
+                            label="📦 Download Best Model (.pkl)", 
+                            data=buffer_model, 
+                            file_name=f"class_{best_model.replace(' ', '_').lower()}.pkl", 
+                            mime="application/octet-stream", 
+                            use_container_width=True
+                        )
+                        
+                    with col_btn2:
+                        buf = io.BytesIO()
+                        fig.savefig(buf, format="png", dpi=600, bbox_inches='tight')
+                        
+                        st.download_button(
+                            label="📥 Download Plot (600 DPI)", 
+                            data=buf.getvalue(), 
+                            file_name="confusion_matrix.png", 
+                            mime="image/png", 
+                            use_container_width=True
+                        )
+
+                # MODULE: PCE
+                elif section == "PCE MODEL":
+                    st.info("Training Polynomial Chaos Expansion (Maximum degree: 3)")
                     try:
-                        # Chama a função no defs.py
-                        resultados_erro, modelos = rodar_pce(X_train, y_train, X_test, y_test, max_degree=3)
+                        error_results, models = run_pce(X_train, y_train, X_test, y_test, max_degree=3)
+                        df_res = pd.DataFrame(list(error_results.items()), columns=["Method", "Relative Error"]).sort_values(by="Relative Error", ascending=True)
                         
-                        # Processa os resultados para encontrar o melhor
-                        df_res = pd.DataFrame(list(resultados_erro.items()), columns=["Método", "Erro Relativo"]).sort_values(by="Erro Relativo", ascending=True)
-                        melhor_mod = df_res.iloc[0]["Método"]
-                        melhor_erro = df_res.iloc[0]["Erro Relativo"]
-                        modelo_campeao = modelos[melhor_mod]
+                        best_model = df_res.iloc[0]["Method"]
+                        champion_model = models[best_model]
                         
-                        # Gera previsões para o Teste e calcula o R² para o gráfico
                         X_test_np = X_test.values.astype(float)
                         y_test_np = y_test.values.astype(float).flatten()
-                        y_pred_campeao = modelo_campeao.predict(X_test_np).flatten()
+                        y_pred_champion = champion_model.predict(X_test_np).flatten()
+                        r2_pce = r2_score(y_test_np, y_pred_champion)
                         
-                        r2_pce = r2_score(y_test_np, y_pred_campeao)
-                        
-                        # -Cards de Métricas Rápidas
                         met_col1, met_col2, met_col3, met_col4 = st.columns(4)
-                        met_col1.metric("Melhor Modelo", melhor_mod)
-                        met_col2.metric("Erro Relativo", f"{melhor_erro:.4f}")
-                        met_col3.metric("R² (Teste)", f"{r2_pce:.4f}")
-                        met_col4.metric("Partição (Treino | Teste)", f"{len(X_train)} | {len(X_test)}")
+                        met_col1.metric("Best Model", best_model)
+                        met_col2.metric("Relative Error", f"{df_res.iloc[0]['Relative Error']:.4f}")
+                        met_col3.metric("R² (Test)", f"{r2_pce:.4f}")
+                        met_col4.metric("Samples (Train | Test)", f"{len(X_train)} | {len(X_test)}")
                         
                         st.divider()
                         
-                        col_tabela, col_grafico = st.columns([1.5, 1], gap="large")
+                        # ROW 1: Table and Plot
+                        col_table, col_plot = st.columns([1.5, 1], gap="large")
                         
-                        with col_tabela:
-                            st.write("**Ranking dos Modelos Testados:**")
-                            st.dataframe(df_res, use_container_width=True, hide_index=True)
-                            
-                            st.write("**Exportação:**")
-                            col_btn1, col_btn2 = st.columns(2)
-                            
-                            # Preparando o PKL
-                            buffer_modelo = io.BytesIO()
-                            pickle.dump(modelo_campeao, buffer_modelo)
-                            buffer_modelo.seek(0)
-                            nome_dataset = arquivo_upload.name.rsplit('.', 1)[0]
-                            
-                            with col_btn1:
-                                st.download_button(
-                                    label="📦 Baixar Melhor Modelo (.pkl)",
-                                    data=buffer_modelo,
-                                    file_name=f"{nome_dataset}_{melhor_mod}.pkl",
-                                    mime="application/octet-stream",
-                                    use_container_width=True
-                                )
+                        with col_table:
+                            st.write("**Ranking of Tested Models:**")
+                            st.dataframe(df_res, use_container_width=True, hide_index=True, height=320)
                                 
-                        with col_grafico:
-                            st.write(f"**Comparação Visual: {melhor_mod}**")
-                            
-                            # Gera o gráfico usando a mesma função da Regressão
-                            fig = plot_real_vs_previsto(y_test_np, y_pred_campeao, r2_pce)
+                        with col_plot:
+                            st.write(f"**Visual Comparison: {best_model}**")
+                            fig = plot_real_vs_predicted(y_test_np, y_pred_champion, r2_pce)
                             st.pyplot(fig, use_container_width=True) 
                             
-                            # Preparando a imagem em 600 DPI
+                        # ROW 2: Export Buttons
+                        st.write("**Export:**")
+                        col_btn1, col_btn2 = st.columns([1.5, 1], gap="large")
+                        
+                        with col_btn1:
+                            buffer_model = io.BytesIO()
+                            pickle.dump(champion_model, buffer_model)
+                            buffer_model.seek(0)
+                            
+                            st.download_button(
+                                label="📦 Download Best Model (.pkl)", 
+                                data=buffer_model, 
+                                file_name=f"pce_{best_model.replace(' ', '_').lower()}.pkl", 
+                                mime="application/octet-stream", 
+                                use_container_width=True
+                            )
+                            
+                        with col_btn2:
                             buf = io.BytesIO()
                             fig.savefig(buf, format="png", dpi=600, bbox_inches='tight')
-                            
-                            with col_btn2:
-                                st.download_button(
-                                    label="📥 Baixar Gráfico (600 DPI)",
-                                    data=buf.getvalue(),
-                                    file_name=f"{nome_dataset}_pce_predicted_vs_observed.png",
-                                    mime="image/png",
-                                    use_container_width=True
-                                )
+                            st.download_button(
+                                label="📥 Download Plot (600 DPI)", 
+                                data=buf.getvalue(), 
+                                file_name="pce_predicted.png", 
+                                mime="image/png", 
+                                use_container_width=True
+                            )
                                 
                     except Exception as e:
-                        st.error(f"Erro ao processar PCE. Verifique se os dados são numéricos contínuos compatíveis. Detalhe: {e}")
+                        st.error(f"Error processing PCE. Detail: {e}")

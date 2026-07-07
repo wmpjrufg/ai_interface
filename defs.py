@@ -1,14 +1,21 @@
 import pandas as pd
 import numpy as np
+
+# Regression and Metrics
 from sklearn.metrics import r2_score, accuracy_score
+from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
+
+# Classification
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+
+# PCE (UQpy)
 from UQpy.distributions import Uniform, JointIndependent
 from UQpy.surrogates import (
     PolynomialChaosExpansion, 
@@ -18,103 +25,116 @@ from UQpy.surrogates import (
     TotalDegreeBasis
 )
 
-# IA REGRESSION
-def treinar_regressao(X_train, X_test, y_train, y_test):
-    """Treina modelos de regressão e retorna o R² de cada um."""
-    modelos = {
-        "Regressão Linear": LinearRegression(),
-        "Regressão Não Linear (Grau 2)": make_pipeline(PolynomialFeatures(degree=2), LinearRegression()),
-        "Árvore de Decisão": DecisionTreeRegressor(random_state=42),
-        "Random Forest": RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1),
-        "Gradient Boosting": GradientBoostingRegressor(random_state=42)
+# AI REGRESSION
+def train_regression(X_train, X_test, y_train, y_test, selected_models, k_folds=5, random_seed=42):
+    """Trains the selected regression models and returns K-Fold metrics."""
+    all_models = {
+        "Linear Regression": LinearRegression(),
+        "Non-Linear Regression (Degree 2)": make_pipeline(PolynomialFeatures(degree=2), LinearRegression()),
+        "Decision Tree": DecisionTreeRegressor(random_state=random_seed),
+        "Random Forest": RandomForestRegressor(n_estimators=100, random_state=random_seed, n_jobs=-1),
+        "Gradient Boosting": GradientBoostingRegressor(random_state=random_seed)
     }
     
-    resultados = {}
-    modelos_treinados = {}
+    models = {name: all_models[name] for name in selected_models}
     
-    for nome, model in modelos.items():
+    # K-Fold usando os parâmetros do usuário
+    kf = KFold(n_splits=k_folds, shuffle=True, random_state=random_seed)
+    
+    results, trained_models, cv_scores, cv_avg = {}, {}, {}, {}
+    
+    for name, model in models.items():
+        scores = cross_val_score(model, X_train, y_train, cv=kf, scoring='r2')
+        cv_scores[name] = [round(score, 4) for score in scores]
+        cv_avg[name] = np.mean(scores)
+        
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
-        r2 = r2_score(y_test, y_pred)
         
-        resultados[nome] = r2
-        modelos_treinados[nome] = model
+        results[name] = r2_score(y_test, y_pred)
+        trained_models[name] = model
         
-    return resultados, modelos_treinados
+    return results, trained_models, cv_scores, cv_avg
 
-# IA CLASSIFICATION
-def treinar_classificacao(X_train, X_test, y_train, y_test):
-    """Treina modelos de classificação e retorna a Acurácia de cada um."""
-    modelos = {
-        "Regressão Logística": LogisticRegression(max_iter=1000, random_state=42),
-        "Árvore de Decisão": DecisionTreeClassifier(random_state=42),
-        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1),
-        "Gradient Boosting": GradientBoostingClassifier(random_state=42)
+# AI CLASSIFICATION
+def train_classification(X_train, X_test, y_train, y_test, selected_models, k_folds=5, random_seed=42):
+    """Trains the selected classification models and returns Stratified K-Fold metrics."""
+    all_models = {
+        "Logistic Regression": LogisticRegression(max_iter=1000, random_state=random_seed),
+        "Decision Tree": DecisionTreeClassifier(random_state=random_seed),
+        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=random_seed, n_jobs=-1),
+        "Gradient Boosting": GradientBoostingClassifier(random_state=random_seed)
     }
     
-    resultados = {}
-    modelos_treinados = {}
+    models = {name: all_models[name] for name in selected_models}
     
-    for nome, model in modelos.items():
+    # Stratified K-Fold usando os parâmetros do usuário
+    skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=random_seed)
+    
+    results, trained_models, cv_scores, cv_avg = {}, {}, {}, {}
+    
+    for name, model in models.items():
+        scores = cross_val_score(model, X_train, y_train, cv=skf, scoring='accuracy')
+        cv_scores[name] = [round(score, 4) for score in scores]
+        cv_avg[name] = np.mean(scores)
+        
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
-        # Usando Acurácia em vez de R² para classificação
-        acc = accuracy_score(y_test, y_pred) 
         
-        resultados[nome] = acc
-        modelos_treinados[nome] = model
+        results[name] = accuracy_score(y_test, y_pred) 
+        trained_models[name] = model
         
-    return resultados, modelos_treinados
+    return results, trained_models, cv_scores, cv_avg
 
-# PCE MODEL (Polynomial Chaos Expansion)
-def rodar_pce(X_train, y_train, X_test, y_test, max_degree=3):
+# PCE MODEL
+def run_pce(X_train, y_train, X_test, y_test, max_degree=3):
     """
-    Constrói surrogates PCE usando LSTSQ, LASSO e Ridge.
-    Garante a conversão para float64 para evitar erros nas funções de Legendre.
+    Builds PCE surrogates using LSTSQ, LASSO and Ridge.
+    Ensures conversion to float64 to avoid errors in Legendre functions.
     """
-    # 0. Tratamento Crítico: Forçando o tipo float para o UQpy aceitar os dados
+    # 0. Critical Treatment: Forcing float type for UQpy to accept the data
     X_train_np = X_train.values.astype(float)
     y_train_np = y_train.values.astype(float)
     X_test_np = X_test.values.astype(float)
     y_val_real = y_test.values.astype(float).flatten()
 
-    # 1. Configurando a Distribuição Conjunta
-    num_variaveis = X_train_np.shape[1]
+    # 1. Configuring the Joint Distribution
+    num_variables = X_train_np.shape[1]
     
-    # Cria uma distribuição marginal Uniform(0,1) para cada variável
-    marg = [Uniform(loc=0, scale=1)] * num_variaveis
+    # Creates a Uniform(0,1) marginal distribution for each variable
+    marg = [Uniform(loc=0, scale=1)] * num_variables
     joint = JointIndependent(marginals=marg)
     
-    # 2. Configurando a Base Polinomial
+    # 2. Configuring the Polynomial Basis
     polynomial_basis = TotalDegreeBasis(joint, max_degree)
     
-    modelos_pce = {}
-    resultados_erro = {}
+    pce_models = {}
+    error_results = {}
     
-    # 3. Treinamento: Mínimos Quadrados (LSTSQ)
+    # 3. Training: Least Squares (LSTSQ)
     ls_pce = PolynomialChaosExpansion(polynomial_basis=polynomial_basis, regression_method=LeastSquareRegression())
     ls_pce.fit(X_train_np, y_train_np)
-    modelos_pce['PCE - Least Squares'] = ls_pce
+    pce_models['PCE - Least Squares'] = ls_pce
     
-    # 4. Treinamento: LASSO
+    # 4. Training: LASSO
     lasso_pce = PolynomialChaosExpansion(polynomial_basis=polynomial_basis, regression_method=LassoRegression())
     lasso_pce.fit(X_train_np, y_train_np)
-    modelos_pce['PCE - LASSO'] = lasso_pce
+    pce_models['PCE - LASSO'] = lasso_pce
     
-    # 5. Treinamento: Ridge
+    # 5. Training: Ridge
     ridge_pce = PolynomialChaosExpansion(polynomial_basis=polynomial_basis, regression_method=RidgeRegression())
     ridge_pce.fit(X_train_np, y_train_np)
-    modelos_pce['PCE - Ridge'] = ridge_pce
+    pce_models['PCE - Ridge'] = ridge_pce
     
-    # 6. Validação (Cálculo do Erro Relativo)
+    # 6. Validation (Relative Error Calculation)
     n_samples_val = len(X_test_np)
     
-    for nome, modelo in modelos_pce.items():
-        # Previsão achatada (flatten)
-        y_pred = modelo.predict(X_test_np).flatten()
+    for name, model in pce_models.items():
+        # Flattened prediction
+        y_pred = model.predict(X_test_np).flatten()
         
-        # Erro de validação
-        erro = np.sum(np.abs(y_pred - y_val_real) / (np.abs(y_val_real) + 1e-8)) / n_samples_val
-        resultados_erro[nome] = erro
+        # Validation error
+        error = np.sum(np.abs(y_pred - y_val_real) / (np.abs(y_val_real) + 1e-8)) / n_samples_val
+        error_results[name] = error
         
-    return resultados_erro, modelos_pce
+    return error_results, pce_models
