@@ -33,6 +33,8 @@ from UQpy.surrogates import (
     TotalDegreeBasis
 )
 
+# Symbolic Regression
+from gplearn.genetic import SymbolicRegressor
 
 # AI REGRESSION
 def train_regression(X_train, X_test, y_train, y_test, selected_models, k_folds=5, random_seed=42):
@@ -331,3 +333,40 @@ def train_neural_network(X_train, X_test, y_train, y_test, global_task, hidden_l
     trained_models[model_name] = champion_wrapper
 
     return results, trained_models, cv_scores, cv_avg
+
+#Symbolic Regression
+def run_symbolic_regression(X_train, X_test, y_train, y_test, pop_size=5000, gens=20, parsimony=0.001, random_seed=42):
+    """
+    Treina o modelo de Regressão Simbólica utilizando Algoritmos Genéticos.
+    Utiliza os parâmetros recomendados pela documentação do gplearn.
+    """
+    # Captura o nome das colunas para que a equação gerada use os nomes reais
+    feature_names = X_train.columns.tolist() if isinstance(X_train, pd.DataFrame) else None
+    
+    # Configuração exata com base no exemplo da documentação
+    est_gp = SymbolicRegressor(
+        population_size=pop_size,
+        generations=gens,
+        stopping_criteria=0.01,
+        p_crossover=0.7,
+        p_subtree_mutation=0.1,
+        p_hoist_mutation=0.05,
+        p_point_mutation=0.1,
+        max_samples=0.9,
+        verbose=0, # Alterado para 0 para não poluir o terminal do Streamlit
+        parsimony_coefficient=parsimony,
+        random_state=random_seed,
+        feature_names=feature_names 
+    )
+    
+    # Treinamento
+    est_gp.fit(X_train.values, y_train.values)
+    
+    # Previsão e Métrica
+    y_pred = est_gp.predict(X_test.values)
+    r2 = r2_score(y_test.values, y_pred)
+    
+    # Captura a equação bruta gerada pelo algoritmo
+    equation = str(est_gp._program)
+    
+    return r2, est_gp, equation
