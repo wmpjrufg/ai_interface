@@ -9,6 +9,10 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
+from sklearn.ensemble import ExtraTreesRegressor
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import DotProduct, WhiteKernel
+from sklearn.linear_model import Ridge, Lasso, ElasticNet
 
 # Classification
 from sklearn.linear_model import LogisticRegression
@@ -39,12 +43,29 @@ from gplearn.genetic import SymbolicRegressor
 # AI REGRESSION
 def train_regression(X_train, X_test, y_train, y_test, selected_models, k_folds=5, random_seed=42):
     """Trains the selected regression models and returns K-Fold metrics."""
+    # Kernel config for Gaussian Process
+    kernel = DotProduct() + WhiteKernel()
+    
     all_models = {
         "Linear Regression": LinearRegression(),
-        "Non-Linear Regression (Degree 2)": make_pipeline(PolynomialFeatures(degree=2), LinearRegression()),
+        
+        # WIth scaler and ridge
+        "Non-Linear Regression (Degree 2)": make_pipeline(StandardScaler(), PolynomialFeatures(degree=2), Ridge(random_state=random_seed)),
+        "Non-Linear Regression (Degree 3)": make_pipeline(StandardScaler(), PolynomialFeatures(degree=3), Ridge(random_state=random_seed)),
+        "Non-Linear Regression (Degree 4)": make_pipeline(StandardScaler(), PolynomialFeatures(degree=4), Ridge(random_state=random_seed)),
+        "Non-Linear Regression (Degree 5)": make_pipeline(StandardScaler(), PolynomialFeatures(degree=5), Ridge(random_state=random_seed)),
+        "Non-Linear Regression (Degree 6)": make_pipeline(StandardScaler(), PolynomialFeatures(degree=6), Ridge(random_state=random_seed)),
+        # Trees models
         "Decision Tree": DecisionTreeRegressor(random_state=random_seed),
         "Random Forest": RandomForestRegressor(n_estimators=100, random_state=random_seed),
-        "Gradient Boosting": GradientBoostingRegressor(random_state=random_seed)
+        "Gradient Boosting": GradientBoostingRegressor(random_state=random_seed),
+        "Extra Trees": ExtraTreesRegressor(n_estimators=100, random_state=random_seed),
+        # Gaussian need scaler
+        "Gaussian Process": make_pipeline(StandardScaler(), GaussianProcessRegressor(kernel=kernel, random_state=random_seed)),
+        # Linear Models that need scaler
+        "Ridge": make_pipeline(StandardScaler(), Ridge(random_state=random_seed)),
+        "Lasso": make_pipeline(StandardScaler(), Lasso(random_state=random_seed)),
+        "ElasticNet": make_pipeline(StandardScaler(), ElasticNet(random_state=random_seed)),
     }
     
     models = {name: all_models[name] for name in selected_models}

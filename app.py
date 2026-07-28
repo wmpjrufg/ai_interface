@@ -15,9 +15,9 @@ from defs import train_regression, train_classification, run_pce, train_neural_n
 
 st.set_page_config(page_title="Machine Learning Platform", layout="wide", initial_sidebar_state="expanded")
 
-# # Load custom CSS for styling
-# with open("teste.css") as css:
-#     st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)
+# Load custom CSS for styling
+with open("teste.css") as css:
+    st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)
 
 def resetar_treino():
     if "modelo_treinado" in st.session_state:
@@ -97,7 +97,7 @@ def plot_confusion_matrix(y_real, y_pred, acc_val):
 
 # SIDEBAR NAVIGATION
 with st.sidebar:
-    st.title("⚙️ Navigation")
+    st.title("Navigation")
     section = st.radio("Modules:", ["DATA PREPROCESSING" ,"AI REGRESSION", "AI CLASSIFICATION", "AI NEURAL NETWORK", "PCE MODEL", "AI SYMBOLIC REGRESSION"], on_change=resetar_treino)
     
     st.divider()
@@ -139,8 +139,8 @@ with st.sidebar:
                         st.write("**Symbolic Regression Settings**")
                         st.info("Algorithm will attempt to find the best mathematical expression that fits the data using Genetic Programming.")
                         
-                        sr_pop_size = st.number_input("Population Size", min_value=100, max_value=10000, value=5000, step=500, on_change=resetar_treino)
-                        sr_gens = st.number_input("Generations", min_value=5, max_value=100, value=20, step=1, on_change=resetar_treino)
+                        sr_pop_size = st.number_input("Population Size", min_value=0, max_value=10000, value=100, step=50, on_change=resetar_treino)
+                        sr_gens = st.number_input("Generations", min_value=5, max_value=100, value=100, step=5, on_change=resetar_treino)
                         sr_parsimony = st.number_input("Parsimony Coefficient (Bloat Control)", min_value=0.00001, max_value=0.1, value=0.00001, format="%.5f", on_change=resetar_treino)
                         st.divider()
 
@@ -268,8 +268,10 @@ else:
         # Manual selection of models
         chosen_models = []
         if section == "AI REGRESSION":
-            all_options = ["Linear Regression", "Non-Linear Regression (Degree 2)", "Decision Tree", "Random Forest", "Gradient Boosting"]
-            chosen_models = st.multiselect("Choose algorithms to test:", all_options, default=all_options, on_change=resetar_treino)
+            all_options = [
+                "Linear Regression", "Non-Linear Regression (Degree 2)","Non-Linear Regression (Degree 2)","Non-Linear Regression (Degree 3)", "Non-Linear Regression (Degree 4)", "Non-Linear Regression (Degree 5)", "Non-Linear Regression (Degree 6)","Ridge","Lasso","ElasticNet","Decision Tree", "Random Forest", "Extra Trees","Gradient Boosting", "Gaussian Process"]
+            default_options = ["Random Forest", "Extra Trees", "Gaussian Process"]
+            chosen_models = st.multiselect("Choose algorithms to test:", all_options, default=default_options, on_change=resetar_treino)
         elif section == "AI CLASSIFICATION":
             all_options = ["Logistic Regression", "Decision Tree", "Random Forest", "Gradient Boosting"]
             chosen_models = st.multiselect("Choose algorithms to test:", all_options, default=all_options, on_change=resetar_treino)

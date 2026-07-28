@@ -1,7 +1,23 @@
-/* Usando o data-testid que é imune às atualizações do Streamlit */
 [data-testid="stAppViewContainer"] > section {
-    background-color: #d5d1d1;
+    background-color: #fdfdfd;
     padding: 15px;
     border-radius: 5px;
-    box-shadow: 2px 0px 26px rgba(222, 19, 5, 0.942);
+    box-shadow: 2px 0px 26px rgba(176, 176, 176, 0.942);
 }
+
+[data-testid="stMarkdownContainer"] > h1 {
+    text-align: left;
+    font-size: 60px;
+    padding: 0px 10px 30px 0px;
+}
+
+/*Escolha dos modeluos ( Architecture Size and Batch Size)*/
+[data-testid="stMarkdownContainer"] > p {
+    padding: 0px 0px 4px 10px;
+    font-size: 20px;
+    font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+}
+
+
+
+
