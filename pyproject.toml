@@ -1,0 +1,18 @@
+[project]
+name = "ai-interface"
+version = "0.1.0"
+description = "Dashboard para treinamento e comparação de modelos de machine learning"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "streamlit==1.52.2",
+    "pandas==2.2.3",
+    "numpy==1.26.4",
+    "matplotlib==3.8.4",
+    "seaborn==0.13.2",
+    "scikit-learn==1.4.2",
+    "dill==0.4.1",
+    "UQpy==4.2.1",
+    "openpyxl",
+    "gplearn==0.4.2",
+    "torch==2.2.2",
+]
