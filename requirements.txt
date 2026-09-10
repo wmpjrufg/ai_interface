@@ -6,5 +6,7 @@ seaborn==0.13.2
 scikit-learn==1.4.2
 dill==0.4.1
 UQpy==4.2.1
+gplearn==0.4.2
+torch==2.2.2
 openpyxl
 setuptools==80.9.0
